@@ -1,35 +1,11 @@
 import os
 import re
-from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_from_directory
+import db
 
-FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend')
 
 app = Flask(__name__)
-
-films = [
-    {"id": 1, "title": "Inception",       "description": "Egy tolvaj, aki álommegosztó technológiával lop vállalati titkokat, azt a feladatot kapja, hogy ültessen egy gondolatot egy vezérigazgató elméjébe.", "duration_minutes": 148, "genre": "Sci-Fi"},
-    {"id": 2, "title": "The Dark Knight",  "description": "Batman Gordon hadnagy és Harvey Dent ügyész segítségével új szintre emeli a bűnözők elleni harcát Gotham városában.",                               "duration_minutes": 152, "genre": "Action"},
-    {"id": 3, "title": "Interstellar",    "description": "Felfedezők egy csapata féregjáraton át az űrbe utazik, hogy megtalálja az emberiség új otthonát a haldokló Föld helyett.",                         "duration_minutes": 169, "genre": "Sci-Fi"},
-    {"id": 4, "title": "Parasite",        "description": "A kapzsiság és az osztálykülönbségek fenyegetik a gazdag Park család és a szegény Kim klán között kialakuló szimbiózist.",                         "duration_minutes": 132, "genre": "Drama"},
-    {"id": 5, "title": "Dune",            "description": "Egy nemesi család kerül egy galaktikus háború középpontjába, amelynek tétje az univerzum legértékesebb nyersanyagának feletti uralom.",              "duration_minutes": 155, "genre": "Sci-Fi"},
-]
-
-def make_screenings():
-    now = datetime.now()
-    return [
-        {"id": 1, "film_id": 1, "start_time": (now + timedelta(days=1, hours=14)).isoformat(), "hall": "1-es terem", "rows": 5, "seats_per_row": 10},
-        {"id": 2, "film_id": 1, "start_time": (now + timedelta(days=1, hours=18)).isoformat(), "hall": "2-es terem", "rows": 5, "seats_per_row": 10},
-        {"id": 3, "film_id": 2, "start_time": (now + timedelta(days=2, hours=15)).isoformat(), "hall": "1-es terem", "rows": 5, "seats_per_row": 10},
-        {"id": 4, "film_id": 3, "start_time": (now + timedelta(days=2, hours=19)).isoformat(), "hall": "3-as terem", "rows": 5, "seats_per_row": 10},
-        {"id": 5, "film_id": 4, "start_time": (now + timedelta(days=3, hours=16)).isoformat(), "hall": "2-es terem", "rows": 5, "seats_per_row": 10},
-        {"id": 6, "film_id": 5, "start_time": (now + timedelta(days=3, hours=20)).isoformat(), "hall": "1-es terem", "rows": 5, "seats_per_row": 10},
-    ]
-
-screenings = make_screenings()
-booked_seats = []
-bookings = []
-next_booking_id = 1
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -50,16 +26,19 @@ def health():
 
 @app.route("/api/films", methods=["GET"])
 def list_films():
-    genre = request.args.get("genre", "").strip().lower()
-    result = films if not genre else [f for f in films if f["genre"].lower() == genre]
-    return jsonify(result), 200
+    genre = request.args.get("genre", "").strip()
+    if genre:
+        rows = db.fetchall("SELECT * FROM films WHERE LOWER(genre) = LOWER(%s) ORDER BY title", (genre,))
+    else:
+        rows = db.fetchall("SELECT * FROM films ORDER BY title")
+    return jsonify([dict(r) for r in rows]), 200
 
 @app.route("/api/films/<int:film_id>", methods=["GET"])
 def get_film(film_id):
-    film = next((f for f in films if f["id"] == film_id), None)
+    film = db.fetchone("SELECT * FROM films WHERE id = %s", (film_id,))
     if not film:
         return jsonify({"error": "Film nem található"}), 404
-    return jsonify(film), 200
+    return jsonify(dict(film)), 200
 
 
 @app.route("/api/screenings", methods=["GET"])
@@ -67,35 +46,51 @@ def list_screenings():
     film_id = request.args.get("film_id")
     if film_id is not None and not film_id.isdigit():
         return jsonify({"error": "A film_id egész szám kell legyen"}), 400
-    result = screenings if not film_id else [s for s in screenings if s["film_id"] == int(film_id)]
-    def with_availability(s):
-        taken = sum(1 for b in booked_seats if b["screening_id"] == s["id"])
-        total = s["rows"] * s["seats_per_row"]
-        return {**s, "total_seats": total, "available_seats": total - taken}
-    return jsonify([with_availability(s) for s in result]), 200
+    sql = """
+        SELECT s.*, f.title AS film_title, f.genre, f.duration_minutes,
+               (s.rows * s.seats_per_row) AS total_seats,
+               (s.rows * s.seats_per_row) - COUNT(bs.id) AS available_seats
+        FROM screenings s
+        JOIN films f ON f.id = s.film_id
+        LEFT JOIN booked_seats bs ON bs.screening_id = s.id
+        WHERE s.start_time > NOW() {filter}
+        GROUP BY s.id, f.title, f.genre, f.duration_minutes
+        ORDER BY s.start_time
+    """
+    if film_id:
+        rows = db.fetchall(sql.format(filter="AND s.film_id = %s"), (film_id,))
+    else:
+        rows = db.fetchall(sql.format(filter=""))
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["start_time"] = d["start_time"].isoformat()
+        result.append(d)
+    return jsonify(result), 200
 
 @app.route("/api/screenings/<int:screening_id>", methods=["GET"])
 def get_screening(screening_id):
-    screening = next((s for s in screenings if s["id"] == screening_id), None)
+    screening = db.fetchone("""
+        SELECT s.*, f.title AS film_title, f.description AS film_description,
+               f.genre, f.duration_minutes,
+               (s.rows * s.seats_per_row) AS total_seats
+        FROM screenings s
+        JOIN films f ON f.id = s.film_id
+        WHERE s.id = %s
+    """, (screening_id,))
     if not screening:
         return jsonify({"error": "Vetítés nem található"}), 404
-    film = next((f for f in films if f["id"] == screening["film_id"]), {})
-    taken = [{"seat_row": b["seat_row"], "seat_number": b["seat_number"]}
-             for b in booked_seats if b["screening_id"] == screening_id]
-    return jsonify({
-        **screening,
-        "film_title": film.get("title", ""),
-        "film_description": film.get("description", ""),
-        "genre": film.get("genre", ""),
-        "duration_minutes": film.get("duration_minutes", 0),
-        "total_seats": screening["rows"] * screening["seats_per_row"],
-        "booked_seats": taken,
-    }), 200
+    booked = db.fetchall(
+        "SELECT seat_row, seat_number FROM booked_seats WHERE screening_id = %s", (screening_id,)
+    )
+    result = dict(screening)
+    result["start_time"] = result["start_time"].isoformat()
+    result["booked_seats"] = [dict(r) for r in booked]
+    return jsonify(result), 200
 
 
 @app.route("/api/bookings", methods=["POST"])
 def create_booking():
-    global next_booking_id
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "JSON törzs szükséges"}), 400
@@ -113,7 +108,10 @@ def create_booking():
     if errors:
         return jsonify({"errors": errors}), 422
 
-    screening = next((s for s in screenings if s["id"] == screening_id), None)
+    screening = db.fetchone(
+        "SELECT id, rows, seats_per_row FROM screenings WHERE id = %s AND start_time > NOW()",
+        (screening_id,)
+    )
     if not screening:
         return jsonify({"error": "Vetítés nem található"}), 404
 
@@ -123,21 +121,24 @@ def create_booking():
             return jsonify({"error": f"Nem létező sor: {seat.get('row')}"}), 422
         if not (1 <= seat.get("number", 0) <= screening["seats_per_row"]):
             return jsonify({"error": f"Nem létező szék: {seat.get('number')}"}), 422
-        if any(b["screening_id"] == screening_id
-               and b["seat_row"] == seat["row"].upper()
-               and b["seat_number"] == seat["number"]
-               for b in booked_seats):
+        taken = db.fetchone(
+            "SELECT id FROM booked_seats WHERE screening_id = %s AND seat_row = %s AND seat_number = %s",
+            (screening_id, seat["row"].upper(), seat["number"])
+        )
+        if taken:
             return jsonify({"error": f"A {seat['row'].upper()}{seat['number']} hely már foglalt"}), 409
 
-    booking_id = next_booking_id
-    next_booking_id += 1
-    created_at = datetime.now().isoformat()
+    booking = db.fetchone(
+        "INSERT INTO bookings (screening_id, customer_name, customer_email) VALUES (%s, %s, %s) RETURNING id, created_at",
+        (screening_id, name, email)
+    )
+    booking_id = booking["id"]
 
-    bookings.append({"id": booking_id, "screening_id": screening_id,
-                     "customer_name": name, "customer_email": email, "created_at": created_at})
     for seat in seats:
-        booked_seats.append({"screening_id": screening_id, "booking_id": booking_id,
-                              "seat_row": seat["row"].upper(), "seat_number": seat["number"]})
+        db.execute(
+            "INSERT INTO booked_seats (screening_id, booking_id, seat_row, seat_number) VALUES (%s, %s, %s, %s)",
+            (screening_id, booking_id, seat["row"].upper(), seat["number"])
+        )
 
     return jsonify({
         "booking_id": booking_id,
@@ -145,20 +146,28 @@ def create_booking():
         "customer_name": name,
         "customer_email": email,
         "seats": [{"row": s["row"].upper(), "number": s["number"]} for s in seats],
-        "created_at": created_at,
+        "created_at": booking["created_at"].isoformat(),
     }), 201
 
 @app.route("/api/bookings/<int:booking_id>", methods=["GET"])
 def get_booking(booking_id):
-    booking = next((b for b in bookings if b["id"] == booking_id), None)
+    booking = db.fetchone("""
+        SELECT b.*, s.start_time, s.hall, f.title AS film_title
+        FROM bookings b
+        JOIN screenings s ON s.id = b.screening_id
+        JOIN films f ON f.id = s.film_id
+        WHERE b.id = %s
+    """, (booking_id,))
     if not booking:
         return jsonify({"error": "Foglalás nem található"}), 404
-    screening = next((s for s in screenings if s["id"] == booking["screening_id"]), {})
-    film = next((f for f in films if f["id"] == screening.get("film_id")), {})
-    seats = [{"seat_row": b["seat_row"], "seat_number": b["seat_number"]}
-             for b in booked_seats if b["booking_id"] == booking_id]
-    return jsonify({**booking, "film_title": film.get("title", ""),
-                    "hall": screening.get("hall", ""), "seats": seats}), 200
+    seats = db.fetchall(
+        "SELECT seat_row, seat_number FROM booked_seats WHERE booking_id = %s", (booking_id,)
+    )
+    result = dict(booking)
+    result["start_time"] = result["start_time"].isoformat()
+    result["created_at"] = result["created_at"].isoformat()
+    result["seats"] = [dict(r) for r in seats]
+    return jsonify(result), 200
 
 
 if __name__ == "__main__":

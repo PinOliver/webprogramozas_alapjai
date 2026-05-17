@@ -24,3 +24,42 @@ jobs:
           context: .
           push: true
           tags: oliverpinter/pintermozi:latest
+
+  test:
+    name: Test pulled image
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: mozi
+          POSTGRES_USER: mozi
+          POSTGRES_PASSWORD: mozi
+        options: >-
+          --health-cmd "pg_isready -U mozi -d mozi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply database schema
+        env:
+          PGPASSWORD: mozi
+        run: psql -h localhost -U mozi -d mozi -f database/init.sql
+
+      - name: Pull image
+        run: docker pull oliverpinter/pintermozi:latest
+
+      - name: Run tests
+        run: |
+          docker run --rm \
+            --network host \
+            -e DATABASE_URL=postgresql://mozi:mozi@localhost:5432/mozi \
+            oliverpinter/pintermozi:latest \
+            python -m pytest test_api.py -v

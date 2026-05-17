@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PintérMozi</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="logo">PintérMozi</a>
+      <nav>
+        <a href="index.html">Filmek</a>
+        <a href="screenings.html">Vetítések</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1>Foglald le a mozijegyed</h1>
+        <p>Válassz filmet, vetítést és ülőhelyet.</p>
+      </div>
+    </section>
+
+    <section class="films-section container">
+      <div class="section-header">
+        <h2>Most játsszák</h2>
+        <div class="filters">
+          <select id="genre-filter">
+            <option value="">Minden műfaj</option>
+            <option value="Sci-Fi">Sci-Fi</option>
+            <option value="Action">Akció</option>
+            <option value="Drama">Dráma</option>
+          </select>
+        </div>
+      </div>
+      <div id="films-grid" class="films-grid">
+        <div class="loading">Filmek betöltése...</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>&copy; 2026 PintérMozi. Minden jog fenntartva.</p>
+    </div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/index.js"></script>
+</body>
+</html>

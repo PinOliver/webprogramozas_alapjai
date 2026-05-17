@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Helyfoglalás  PintérMozi</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="logo">PintérMozi</a>
+      <nav>
+        <a href="index.html">Filmek</a>
+        <a href="screenings.html">Vetítések</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="page-title">
+      <a id="back-link" href="screenings.html" class="back-link">Vissza</a>
+      <h1 id="screening-title">Helyek kiválasztása</h1>
+    </div>
+
+    <div id="screening-meta" class="film-meta"></div>
+
+    <div class="booking-layout">
+      <div class="seat-section">
+        <div class="screen-label">VÁSZON</div>
+        <div id="seat-map" class="seat-map">
+          <div class="loading">Helyek betöltése...</div>
+        </div>
+        <div class="seat-legend">
+          <span class="legend-item"><span class="seat available"></span> Szabad</span>
+          <span class="legend-item"><span class="seat selected"></span> Kiválasztva</span>
+          <span class="legend-item"><span class="seat booked"></span> Foglalt</span>
+        </div>
+        <div class="selection-summary">
+          Kiválasztva: <span id="selected-count">0</span> hely
+          &mdash; <strong id="selected-labels"></strong>
+        </div>
+      </div>
+
+      <div class="booking-form-section">
+        <h2>Adataid</h2>
+        <div id="form-error" class="form-error hidden"></div>
+        <div class="form-group">
+          <label for="customer-name">Teljes név</label>
+          <input type="text" id="customer-name" placeholder="Kovács János" maxlength="255" />
+        </div>
+        <div class="form-group">
+          <label for="customer-email">E-mail cím</label>
+          <input type="email" id="customer-email" placeholder="kovacs.janos@example.com" />
+        </div>
+        <button id="book-btn" class="btn btn-primary" disabled>Foglalás megerősítése</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="confirmation-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>Foglalás megerősítve!</h2>
+      <div id="confirmation-details"></div>
+      <button class="btn btn-primary" onclick="window.location.href='index.html'">Vissza a filmekhez</button>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>&copy; 2026 PintérMozi. Minden jog fenntartva.</p>
+    </div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/booking.js"></script>
+</body>
+</html>

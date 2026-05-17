@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vetítések – PintérMozi</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="logo">PintérMozi</a>
+      <nav>
+        <a href="index.html">Filmek</a>
+        <a href="screenings.html">Vetítések</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="page-title">
+      <a id="back-link" href="index.html" class="back-link">Vissza a filmekhez</a>
+      <h1 id="film-title">Vetítések</h1>
+    </div>
+
+    <div id="film-meta" class="film-meta"></div>
+
+    <div id="screenings-list" class="screenings-list">
+      <div class="loading">Vetítések betöltése...</div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>&copy; 2026 PintérMozi. Minden jog fenntartva.</p>
+    </div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/screenings.js"></script>
+</body>
+</html>
